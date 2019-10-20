@@ -19,7 +19,21 @@ boxplot.movies.ids <- as.vector(movies.count[movies.count$Freq == 67, 1])
 boxplot.examples <- as.data.frame(examples[examples$movie %in% movies.boxplot.ids, ])
 
 # Draw the actual boxplot 
-boxplot(boxplot.examples$rating ~ boxplot.examples$movie)
+boxplot(
+  boxplot.examples$rating ~ boxplot.examples$movie,
+  main = "Movies rated 67 times",
+  xlab = "",
+  ylab = ""
+)
+
+for (i in 1:length(boxplot.movies.ids)) {
+  points(
+    i,
+    mean(boxplot.examples$rating[boxplot.examples$movie == boxplot.movies.ids[i]]),
+    col = "red",
+    pch = 19,
+  )
+}
 
 
 
@@ -37,41 +51,3 @@ entropy <- function(x) {
   p <- probability(x)
   return (-sum(p * log2(p)))
 }
-
-
-?boxplot
-
-
-
-
-
-
-
-
-
-
-examples[examples$movie]
-
-length(examples$rating)
-
-entropy(examples$rating)
-entropy(examples$occupation)
-
-plot(examples$occupation, las=2)
-
-colnames(examples)
-
-colnames(movies)
-
-(genres.count <- colSums(movies[, c(4:21)])) 
-c(which.max(genres.count), max(genres.count))
-
-barplot(genres.count, las=2)
-
-for (i in 4:21) {
-  c(colnames(movies)[i], nrow(movies[movies[i] == 1, ]))
-}
-
-entropy(movies$genre_action)
-barplot(table(movies$genre_action))
-
