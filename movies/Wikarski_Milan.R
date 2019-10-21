@@ -26,11 +26,8 @@ entropy(examples$rating)
 #########################################
 
 wrap.it <- function(x, len) { 
-  sapply(x, function(y) paste(strwrap(y, len), 
-                              collapse = "\n"), 
-         USE.NAMES = FALSE)
+  sapply(x, function(y) paste(strwrap(y, len), collapse = "\n"), USE.NAMES = FALSE)
 }
-
 
 # Call this function with a list or vector
 wrap.labels <- function(x, len) {
@@ -106,26 +103,28 @@ users$three = users.ratings.rel$`3`
 users$four = users.ratings.rel$`4`
 users$five = users.ratings.rel$`5`
 
+head(users)
+
 # Create normalized version of users using Z-score
-users.normalized <- users
-users.normalized$age = scale(users$age, mean(users$age), sd(users$age))
-users.normalized$one = scale(users$one, mean(users$one), sd(users$one))
-users.normalized$two = scale(users$two, mean(users$two), sd(users$two))
-users.normalized$three = scale(users$three, mean(users$three), sd(users$three))
-users.normalized$four = scale(users$four, mean(users$four), sd(users$four))
-users.normalized$five = scale(users$five, mean(users$five), sd(users$five))
+# users.normalized <- users
+# users.normalized$age = scale(users$age, mean(users$age), sd(users$age))
+# users.normalized$one = scale(users$one, mean(users$one), sd(users$one))
+# users.normalized$two = scale(users$two, mean(users$two), sd(users$two))
+# users.normalized$three = scale(users$three, mean(users$three), sd(users$three))
+# users.normalized$four = scale(users$four, mean(users$four), sd(users$four))
+# users.normalized$five = scale(users$five, mean(users$five), sd(users$five))
 
 # Perform clustering
 users.hc <- hclust(dist(users[, c(2, 8:12)]), method = "average")
-users.normalized.hc <- hclust(dist(users.normalized[, c(2, 8:12)]), method = "average")
+# users.normalized.hc <- hclust(dist(users.normalized[, c(2, 8:12)]), method = "average")
 
 # Plot dendrogram
-#plot(users.hc, main = "Users")
-#rect.hclust(users.hc, k = 20, border = "gray")
-#rect.hclust(users.hc, k = 3, border = "red")
-plot(users.normalized.hc, main = "Users [Normalized]")
-rect.hclust(users.normalized.hc, k = 20, border = "gray")
-rect.hclust(users.normalized.hc, k = 3, border = "red")
+plot(users.hc, main = "Users")
+rect.hclust(users.hc, k = 20, border = "gray")
+rect.hclust(users.hc, k = 3, border = "red")
+# plot(users.normalized.hc, main = "Users [Normalized]")
+# rect.hclust(users.normalized.hc, k = 20, border = "gray")
+# rect.hclust(users.normalized.hc, k = 3, border = "red")
 
 # Split users into clusters
 # Each user will be assigned a cluster ID (number in {1, 2, ..., 20})
@@ -136,7 +135,7 @@ users$cluster = cutree(users.hc, k = 20)
 # Freq: number of users in cluster
 users.hc.clusters.count <- as.data.frame(table(users$cluster))
 
-barplot(users.hc.clusters.count$Freq, names.arg=users.hc.clusters.count$Var1)
+#barplot(users.hc.clusters.count$Freq, names.arg=users.hc.clusters.count$Var1)
 
 # Compute the average age of users in each cluster
 # Group.1: cluster ID
