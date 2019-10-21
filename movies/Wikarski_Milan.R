@@ -1,9 +1,8 @@
-source("C:\\Users\\Wiki\\Projects\\school\\machine-learning\\movies\\load-mov-data.R")
-
+source("~/Projects/school/NPFL054/movies/load-mov-data.R")
 
 
 #########################################
-##              PART 02                ##
+##              PART 01                ##
 #########################################
 
 # Returns probability table
@@ -62,14 +61,22 @@ for (i in 1:length(boxplot.movies.ids)) {
 #########################################
 
 # Group examples by users and calculate the number of ratings for each user
+# This creates a data frame containing:
+#   - count of n-star ratings for n in {1, 2, ..., 5}
+#   - count of all ratings 
 users.ratings <- table(examples[, c(2, 3)])
 users.ratings <- as.data.frame(cbind(users.ratings, total = rowSums(users.ratings)))
 
 # Calculate relative frequency of 1-5 stars rating for each user
+# This creates a data frame with same structure as users.ratings
+#   but uses relative count instead of absolute
 users.ratings.rel <- as.data.frame(round(users.ratings / users.ratings$total, 2))
 
-# Extend users by adding column `nratings`
+# Extend users by adding column nratings (= number of all ratings)`
 users$nratings = users.ratings$total
+
+# Extend users by computing column avg (= average rating)
+users$avg = aggregate(examples[, c(3)], list(examples$user), mean)
 
 # Extend users by adding colums `one`, `two`, `three`, `four`, `five` with relative frequency
 users$one = users.ratings.rel$`1`
@@ -78,19 +85,43 @@ users$three = users.ratings.rel$`3`
 users$four = users.ratings.rel$`4`
 users$five = users.ratings.rel$`5`
 
-colnames(users)
+# Create normalized version of users using Z-score
+users.normalized <- users
+users.normalized$age = scale(users$age, mean(users$age), sd(users$age))
+users.normalized$one = scale(users$one, mean(users$one), sd(users$one))
+users.normalized$two = scale(users$two, mean(users$two), sd(users$two))
+users.normalized$three = scale(users$three, mean(users$three), sd(users$three))
+users.normalized$four = scale(users$four, mean(users$four), sd(users$four))
+users.normalized$five = scale(users$five, mean(users$five), sd(users$five))
 
-dist(users[, c(2, 7:11)])
+# Perform clustering
+users.hc <- hclust(dist(users[, c(2, 8:12)]), method = "average")
+users.normalized.hc <- hclust(dist(users.normalized[, c(2, 8:12)]), method = "average")
 
-head(users[, c(2, 7:11)])
+# Plot dendrogram
+#plot(users.hc, main = "Users")
+#rect.hclust(users.hc, k = 20, border = "gray")
+#rect.hclust(users.hc, k = 3, border = "red")
+plot(users.normalized.hc, main = "Users [Normalized]")
+rect.hclust(users.normalized.hc, k = 20, border = "gray")
+rect.hclust(users.normalized.hc, k = 3, border = "red")
 
-hist(users$nratings)
+# Split users into clusters
+# Each user will be assigned a cluster ID (number in {1, 2, ..., 20})
+users$cluster = cutree(users.hc, k = 20)
 
-min(users$age)
-max(users$age)
+# Compute the number of users in each cluster
+# Var1: cluster ID
+# Freq: number of users in cluster
+users.hc.clusters.count <- as.data.frame(table(users$cluster))
 
-#users.ratings <- as.data.frame(cbind(users.ratings, rel1 = users.ratings[1] / users.ratings$total))
+barplot(users.hc.clusters.count$Freq, names.arg=users.hc.clusters.count$Var1)
 
-#users.ratings.rel <- table(users.ratings) / users.ratings$total
+# Compute the average age of users in each cluster
+# Group.1: cluster ID
+# x: average age of users in cluster
+users.hc.clusters.mean <- aggregate(users[, 2], list(users$cluster), mean)
 
-#users.ratings
+# Check if some users have same values for attributes age, one, two, three, four, five and cluste
+# All FALSE => no duplicates in any group 
+table(duplicated(users[, c(2, 8:13)]))
