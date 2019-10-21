@@ -25,14 +25,37 @@ entropy(examples$rating)
 ##              PART 02                ##
 #########################################
 
+wrap.it <- function(x, len) { 
+  sapply(x, function(y) paste(strwrap(y, len), 
+                              collapse = "\n"), 
+         USE.NAMES = FALSE)
+}
+
+
+# Call this function with a list or vector
+wrap.labels <- function(x, len) {
+  if (is.list(x))
+  {
+    lapply(x, wrap.it, len)
+  } else {
+    wrap.it(x, len)
+  }
+}
+
+remove.last.7 <- function(cs) {
+  return(gsub('.{7}$', '', cs))
+}
+
 # Create a data frame with columns "Var1" (ID), "Freq" (count)
 movies.count <- as.data.frame(table(examples$movie))
 
 # Vector with IDs of movies that have exactly 67 reviews
 boxplot.movies.ids <- as.vector(movies.count[movies.count$Freq == 67, 1])
 
-# Data frame containing 
+# Data frame containing all examples with IDs contained in boxplot.movies.ids 
 boxplot.examples <- as.data.frame(examples[examples$movie %in% boxplot.movies.ids, ])
+
+par(mar=c(10, 8, 8, 4))
 
 # Draw the actual boxplot 
 boxplot(
@@ -40,7 +63,7 @@ boxplot(
   main = "Movies rated 67 times",
   xlab = "",
   ylab = "",
-  names = unique(boxplot.examples$title),
+  names = remove.last.7(wrap.labels(unique(boxplot.examples$title), 20)),
   las = 2
 )
 
@@ -52,8 +75,6 @@ for (i in 1:length(boxplot.movies.ids)) {
     pch = 19,
   )
 }
-
-
 
 
 #########################################
