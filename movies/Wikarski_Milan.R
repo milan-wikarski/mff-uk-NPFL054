@@ -1,9 +1,29 @@
 source("~/Projects/school/NPFL054/movies/load-mov-data.R")
 
+#########################################
+##              PART 00                ##
+#########################################
 
-#########################################
-##              PART 01                ##
-#########################################
+# Helper functions
+
+# Wraps string into multiple lines
+wrap.it <- function(x, len) { 
+  sapply(x, function(y) paste(strwrap(y, len), collapse = "\n"), USE.NAMES = FALSE)
+}
+
+# Call this function with a list or vector
+wrap.labels <- function(x, len) {
+  if (is.list(x)) {
+    lapply(x, wrap.it, len)
+  } else {
+    wrap.it(x, len)
+  }
+}
+
+# Removes last 7 chars of a string
+remove.last.7 <- function(cs) {
+  return(gsub('.{7}$', '', cs))
+}
 
 # Returns probability table
 probability <- function(x) {
@@ -16,6 +36,12 @@ entropy <- function(x) {
   return (-sum(p * log2(p)))
 }
 
+
+
+#########################################
+##              PART 01                ##
+#########################################
+
 entropy(examples$occupation)
 entropy(examples$rating)
 
@@ -24,24 +50,6 @@ entropy(examples$rating)
 #########################################
 ##              PART 02                ##
 #########################################
-
-wrap.it <- function(x, len) { 
-  sapply(x, function(y) paste(strwrap(y, len), collapse = "\n"), USE.NAMES = FALSE)
-}
-
-# Call this function with a list or vector
-wrap.labels <- function(x, len) {
-  if (is.list(x))
-  {
-    lapply(x, wrap.it, len)
-  } else {
-    wrap.it(x, len)
-  }
-}
-
-remove.last.7 <- function(cs) {
-  return(gsub('.{7}$', '', cs))
-}
 
 # Create a data frame with columns "Var1" (ID), "Freq" (count)
 movies.count <- as.data.frame(table(examples$movie))
@@ -74,9 +82,14 @@ for (i in 1:length(boxplot.movies.ids)) {
 }
 
 
+
 #########################################
 ##              PART 03                ##
 #########################################
+
+#
+# (A)
+#
 
 # Group examples by users and calculate the number of ratings for each user
 # This creates a data frame containing:
@@ -103,45 +116,76 @@ users$three = users.ratings.rel$`3`
 users$four = users.ratings.rel$`4`
 users$five = users.ratings.rel$`5`
 
-head(users)
-
 # Create normalized version of users using Z-score
-# users.normalized <- users
-# users.normalized$age = scale(users$age, mean(users$age), sd(users$age))
-# users.normalized$one = scale(users$one, mean(users$one), sd(users$one))
-# users.normalized$two = scale(users$two, mean(users$two), sd(users$two))
-# users.normalized$three = scale(users$three, mean(users$three), sd(users$three))
-# users.normalized$four = scale(users$four, mean(users$four), sd(users$four))
-# users.normalized$five = scale(users$five, mean(users$five), sd(users$five))
+users.norm <- users
+users.norm$age = scale(users$age, mean(users$age), sd(users$age))
+users.norm$one = scale(users$one, mean(users$one), sd(users$one))
+users.norm$two = scale(users$two, mean(users$two), sd(users$two))
+users.norm$three = scale(users$three, mean(users$three), sd(users$three))
+users.norm$four = scale(users$four, mean(users$four), sd(users$four))
+users.norm$five = scale(users$five, mean(users$five), sd(users$five))
+
+
+#
+# (B)
+#
 
 # Perform clustering
 users.hc <- hclust(dist(users[, c(2, 8:12)]), method = "average")
-# users.normalized.hc <- hclust(dist(users.normalized[, c(2, 8:12)]), method = "average")
+users.norm.hc <- hclust(dist(users.norm[, c(2, 8:12)]), method = "average")
 
-# Plot dendrogram
-plot(users.hc, main = "Users")
-rect.hclust(users.hc, k = 20, border = "gray")
-rect.hclust(users.hc, k = 3, border = "red")
-# plot(users.normalized.hc, main = "Users [Normalized]")
-# rect.hclust(users.normalized.hc, k = 20, border = "gray")
-# rect.hclust(users.normalized.hc, k = 3, border = "red")
+
+#
+# (C)
+#
 
 # Split users into clusters
 # Each user will be assigned a cluster ID (number in {1, 2, ..., 20})
 users$cluster = cutree(users.hc, k = 20)
+users.norm$cluster = cutree(users.norm.hc, k = 20)
+
+
+#
+# (D)
+#
 
 # Compute the number of users in each cluster
 # Var1: cluster ID
 # Freq: number of users in cluster
 users.hc.clusters.count <- as.data.frame(table(users$cluster))
-
-#barplot(users.hc.clusters.count$Freq, names.arg=users.hc.clusters.count$Var1)
+users.norm.hc.clusters.count <- as.data.frame(table(users.norm$cluster))
 
 # Compute the average age of users in each cluster
 # Group.1: cluster ID
 # x: average age of users in cluster
 users.hc.clusters.mean <- aggregate(users[, 2], list(users$cluster), mean)
+users.norm.hc.clusters.mean <- aggregate(users.norm[, 2], list(users$cluster), mean)
 
 # Check if some users have same values for attributes age, one, two, three, four, five and cluste
 # All FALSE => no duplicates in any group 
 table(duplicated(users[, c(2, 8:13)]))
+
+
+#
+# (*)
+#
+
+# Plot everything
+par(mfrow = c(2,2))
+
+# Plot dendrograms
+plot(users.hc, main = "Users")
+rect.hclust(users.hc, k = 20, border = "blue4")
+
+plot(users.norm.hc, main = "Users [Normalized]")
+rect.hclust(users.norm.hc, k = 20, border = "blue4")
+
+barplot(
+  users.hc.clusters.count[order(users.hc.clusters.count$Freq, decreasing = T), ]$Freq,
+  main = "Cluster Size",
+)
+
+barplot(
+  users.norm.hc.clusters.count[order(users.norm.hc.clusters.count$Freq, decreasing = T), c(2)],
+  main="Cluster Size [Normalized]"
+)
