@@ -1,5 +1,6 @@
 ## PARAMETERS ##
 params.fileOutput <- TRUE
+params.workDir <- "~/School/NPFL054/movies/"
 
 
 #########################################
@@ -7,7 +8,7 @@ params.fileOutput <- TRUE
 #########################################
 
 # Set working directry and load data
-setwd("~/School/NPFL054/movies/")
+setwd(params.workDir)
 source("load-mov-data.R")
 
 # Helper functions
