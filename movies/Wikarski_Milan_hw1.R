@@ -32,15 +32,17 @@ remove.last.7 <- function(cs) {
   return(gsub('.{7}$', '', cs))
 }
 
-# Returns probability table
-probability <- function(x) {
-  return(table(x) / length(x))
-}
+entropy <- function(p) {
+  if (sum(p) == 0) {
+    return(0)
+  }
 
-# Returns the entropy of a given feature
-entropy <- function(x) {
-  p <- probability(x)
-  return (-sum(p * log2(p)))
+  p <- p / sum(p)
+  p <- p[p > 0] # Discard zero entries
+
+  H = -sum(p*log(p,base=2))
+
+  return(H)
 }
 
 # Global chart parameters
@@ -56,10 +58,10 @@ if (params.fileOutput && !dir.exists("out")) {
 ##              PART 01                ##
 #########################################
 
-entropy(examples$occupation)
-entropy(examples$rating)
+p1.data.occupation <- table(examples$occupation) / length(examples$occupation)  
+p1.data.rating <- table(examples$rating) / length(examples$rating)  
 
-
+entropy(rowSums(table(examples$occupation, examples$rating)))
 
 #########################################
 ##              PART 02                ##
@@ -73,6 +75,8 @@ boxplot.movies.ids <- as.vector(movies.count[movies.count$Freq == 67, 1])
 
 # Data frame containing all examples with IDs contained in boxplot.movies.ids 
 boxplot.examples <- as.data.frame(examples[examples$movie %in% boxplot.movies.ids, ])
+
+min(users$age)
 
 if (params.fileOutput) {
   pdf("out/boxplot.pdf", width = 10, height = 10)
