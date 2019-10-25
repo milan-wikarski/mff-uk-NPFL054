@@ -13,7 +13,7 @@
 #################################################################################
 #################################################################################
 
-examples <- read.csv("~/Projects/school/NPFL054/movies/mov.development.csv", sep="\t")
+examples <- read.csv("~/School/NPFL054/movies/mov.development.csv", sep="\t")
 
 ## convert timestamp to date object
 examples$timestamp <- as.POSIXct(examples$timestamp, origin="1970-01-01")
