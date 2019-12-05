@@ -1,14 +1,50 @@
-## PARAMETERS ##
+# Table of contents
+# │
+# ├─ 1: Parameters
+# │
+# ├─ 2: Helper functions
+# │  ├─ 2.1: inc() 
+# │  ├─ 2.2: entropy() 
+# │  └─ 2.3: binary.eval()
+# │
+# ├─ 3: Initialization
+# │
+# ├─ 4: Data analysis
+# │  ├─ 4.1: Traget feature distribution
+#
+# used: │, ├, ─, └
+
+#
+#
+#
+#
+#
+#
+
+#########################################
+##           1: PARAMETERS             ##
+#########################################
+params.workDir <- '~/School/NPFL054/hw/hw3'
+params.outDir <- 'out/'
+params.libPaths <- '~/R/libs'
+
 params.fileOutput <- TRUE
-params.workDir <- "~/School/NPFL054/cars/"
-params.libPaths <- "~/R/libs"
+
 params.seed <- 4356
 
+params.testSize <- 1000
 
+#
+#
+#
+#
+#
+#
 
 #########################################
-##          HELPER FUNCTIONS           ##
+##        2: HELPER FUNCTIONS          ##
 #########################################
+
 inc <- function(x) {
  eval.parent(substitute(x <- x + 1))
 }
@@ -26,14 +62,14 @@ entropy <- function(p) {
   return(H)
 }
 
-binary.evaluation <- function(predictedValues, trueValues) {
+binary.eval <- function(predictedValues, trueValues) {
   # Convert predicted and true values to vectors
   predictedValues <- as.vector(predictedValues)
   trueValues <- as.vector(trueValues)
 
   # Check the length
   if (length(predictedValues) != length(trueValues)) {
-    stop("[predictedValues] and [trueValues] are of different length")
+    stop('[predictedValues] and [trueValues] are of different length')
   }
 
   res <- list()
@@ -44,8 +80,8 @@ binary.evaluation <- function(predictedValues, trueValues) {
   res$confusion.matrix <- matrix(data = c(0, 0, 0, 0), nrow = 2, ncol = 2)
 
   dimnames(res$confusion.matrix) <- list(
-    c("Truly positive", "Truly negative"),
-    c("Predicted positive", "Predicted negative")
+    c('Truly positive', 'Truly negative'),
+    c('Predicted positive', 'Predicted negative')
   )
 
   for (i in 1:length(predictedValues)) {
@@ -72,9 +108,19 @@ binary.evaluation <- function(predictedValues, trueValues) {
   return(res)
 }
 
+#
+#
+#
+#
+#
+#
+
 #########################################
-##              PART 00                ##
+##         3: Initialization           ##
 #########################################
+
+# Set working directry and load data
+setwd(params.workDir)
 
 # Set seed
 set.seed(params.seed)
@@ -83,17 +129,14 @@ set.seed(params.seed)
 .libPaths(params.libPaths)
 
 # Load packages
-pacman::p_load(pacman, ISLR, rpart, rpart.plot, RColorBrewer)
-
-# Set working directry and load data
-setwd(params.workDir)
+pacman::p_load(pacman, ISLR, rpart, rpart.plot, RColorBrewer, randomForest)
 
 # Global chart parameters
-par(cex = 1.5)
+par(cex = 1.5, xpd = TRUE)
 
 # Create /out directory
-if (params.fileOutput && !dir.exists("out")) {
-  dir.create("out")
+if (params.fileOutput && !dir.exists(params.outDir)) {
+  dir.create(params.outDir)
 }
 
 # Choose colors
@@ -102,3 +145,103 @@ colors <- sample(grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), inver
 # Load data
 data <- Caravan
 attach(data)
+
+# Randomly select indexes
+indexes.all <- c(1: nrow(data))
+indexes.test <- sample(indexes.all, params.testSize)
+indexes.train <- indexes.all[is.na(pmatch(indexes.all, indexes.test))]
+
+if (length(intersect(indexes.test, indexes.train)) != 0) {
+  stop('Intersect of indexes.test and indexes.train is not empty')
+}
+
+# Split data into train and test subsets
+data.train <- data[indexes.train, ]
+data.test <- data[indexes.test, ]
+
+
+#
+#
+#
+#
+#
+#
+
+#########################################
+##          4: Data analysis           ##
+#########################################
+
+#
+# 4.1: Target attribute distribution
+#
+
+purchase.freq <- table(Purchase) / nrow(data)
+
+# Barplot of target feature distribution
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "target-attribute-frequency.pdf"), width = 10, height = 10)
+}
+
+par(mar = c(5, 5, 5, 5))
+
+purchase.barplot <- barplot(
+  table(Purchase),
+  ylim = c(0, length(Purchase) + 500),
+  main = "Target feature distribution"
+)
+
+text(
+  x = purchase.barplot,
+  y = table(Purchase) + 200,
+  label = paste(round(purchase.freq, 4) * 100, "%")
+)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+# Print the mean of precision sampling distribution
+message("The mean of precision sampling distribution is:")
+as.numeric(purchase.freq[2])
+
+#
+# 4.2
+#
+
+# Label factors in MOSHOOFD
+MOSHOOFD.labels <- c("Successful hedonists", "Driven growers", "Average family", "Career loners", "Living well", "Cruising seniors", "Retired and religious", "Family with grown ups", "Conservative families", "Farmers")
+
+# Create MOSHOOFD distribution barplot
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "customer-main-type-distribution.pdf"), width = 10, height = 10)
+}
+
+par(mar = c(10, 5, 5, 5))
+barplot(table(MOSHOOFD), names = MOSHOOFD.labels, main = "Customer main type distribution", las = 2)
+
+if (params.fileOutput) {
+  dev.off()
+} 
+
+# Calculate the percentage of people who purchased a caravan policy in every group
+MOSHOOFD.purchase <- as.data.frame(MOSHOOFD.labels)
+MOSHOOFD.purchase$Count <- table(MOSHOOFD)
+MOSHOOFD.purchase$No <- table(MOSHOOFD, Purchase)[, 1]
+MOSHOOFD.purchase$No.Freq <- MOSHOOFD.purchase$No / MOSHOOFD.purchase$Count
+MOSHOOFD.purchase$Yes <- table(MOSHOOFD, Purchase)[, 2]
+MOSHOOFD.purchase$Yes.Freq <- MOSHOOFD.purchase$Yes / MOSHOOFD.purchase$Count
+
+# Plot the distribution
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "customer-main-type-purchase.pdf"), width = 10, height = 10)
+}
+
+par(mar = c(10, 5, 5, 5))
+barplot(MOSHOOFD.purchase$Yes.Freq, names = MOSHOOFD.labels, main = "Customer main type ~ Purchase", las = 2)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+table(data$Purchase) / nrow(data)
+table(data.test$Purchase) / nrow(data.test)
