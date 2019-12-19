@@ -3,16 +3,19 @@
 # ├─ 1: Parameters
 # │
 # ├─ 2: Helper functions
-# │  ├─ 2.1: inc() 
-# │  ├─ 2.2: entropy() 
-# │  └─ 2.3: binary.eval()
+# │  ├─ 2.1: inc
+# │  ├─ 2.2: entropy 
+# │  └─ 2.3: binary.eval
 # │
 # ├─ 3: Initialization
 # │
 # ├─ 4: Data Divison
 # │
-# ├─ 5: Data analysis
+# ├─ 5: Data analysis (Task 1)
 # │  ├─ 5.1: Traget feature distribution
+# │  ├─ 5.2: MOSHOOFD (1a)
+# │  ├─ 5.3: MOSTYPE (1a)
+# │  ├─ 5.4: MOSTYPE, MOSHOOFD relationship (1b)
 #
 # used: │, ├, ─, └
 
@@ -60,7 +63,7 @@ entropy <- function(p) {
   p <- p / sum(p)
   p <- p[p > 0] # Discard zero entries
 
-  H = -sum(p*log(p,base=2))
+  H <- -sum(p*log(p,base=2))
 
   return(H)
 }
@@ -80,7 +83,7 @@ binary.eval <- function(predictedValues, trueValues) {
   # res$prediction <- predictedValues
   # res$truth <- trueValues
 
-  res$confusion.matrix <- matrix(data = c(0, 0, 0, 0), nrow = 2, ncol = 2)
+  res$confusion.matrix <- matrix(data=c(0, 0, 0, 0), nrow=2, ncol=2)
 
   dimnames(res$confusion.matrix) <- list(
     c('Truly positive', 'Truly negative'),
@@ -150,16 +153,16 @@ if (params.checkPackages) {
   if (!("randomForest" %in% packages)) {
     install.packages("randomForest")
   }
-
-  library(ISLR)
-  library(rpart)
-  library(rpart.plot)
-  library(RColorBrewer)
-  library(randomForest)
 }
+
+library(ISLR)
+library(rpart)
+# library(rpart.plot)
+# library(RColorBrewer)
+# library(randomForest)
  
 # Global chart parameters
-par(cex = 1.5, xpd = TRUE)
+par(cex=1.5, xpd=TRUE)
 
 # Create /out directory
 if (params.fileOutput && !dir.exists(params.outDir)) {
@@ -167,7 +170,7 @@ if (params.fileOutput && !dir.exists(params.outDir)) {
 }
 
 # Choose colors
-colors <- sample(grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)], 30)
+colors <- sample(grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert=T)], 30)
 
 #
 #
@@ -216,21 +219,21 @@ purchase.freq <- table(Purchase) / nrow(data)
 
 # Barplot of target feature distribution
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "target-attribute-frequency.pdf"), width = 10, height = 10)
+  pdf(paste(params.outDir, "target-attribute-frequency.pdf", sep=""), width=10, height=10)
 }
 
-par(mar = c(5, 5, 5, 5))
+par(mar=c(3, 3, 3, 3), cex=1.8)
 
 purchase.barplot <- barplot(
   table(Purchase),
-  ylim = c(0, length(Purchase) + 500),
-  main = "Target feature distribution"
+  ylim=c(0, length(Purchase) + 500),
+  main="Target feature distribution"
 )
 
 text(
-  x = purchase.barplot,
-  y = table(Purchase) + 200,
-  label = paste(round(purchase.freq, 4) * 100, "%")
+  x=purchase.barplot,
+  y=table(Purchase) + 200,
+  label=paste(round(purchase.freq, 4) * 100, "%")
 )
 
 if (params.fileOutput) {
@@ -242,84 +245,225 @@ message("The mean of precision sampling distribution is:")
 as.numeric(purchase.freq[2])
 
 #
-# 5.2
+# 5.2: MOSHOOFD
 #
 
-# Label factors in MOSHOOFD
-MOSHOOFD.labels <- c("Successful hedonists", "Driven growers", "Average family", "Career loners", "Living well", "Cruising seniors", "Retired and religious", "Family with grown ups", "Conservative families", "Farmers")
+# Calculate Purchase frequency per group
+MOSHOOFD.purchase <- (table(MOSHOOFD, Purchase) / as.vector(table(MOSHOOFD)))
 
-# Create MOSHOOFD distribution barplot
+# Save table to CSV
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-main-type-distribution.pdf"), width = 10, height = 10)
+  write.csv(
+    cbind(table(MOSHOOFD), MOSHOOFD.purchase),
+    file=paste(params.outDir, "customer-main-type.csv", sep="")
+  )
 }
 
-par(mar = c(10, 5, 5, 5))
-barplot(table(MOSHOOFD), names = MOSHOOFD.labels, main = "Customer main type distribution", las = 2)
+# Plot MOSHOOFD
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "customer-main-type.pdf", sep=""), width=20, height=6)
+}
+
+par(mar=c(3, 3, 3, 3), mfrow=c(1, 2), cex=1.8)
+
+# Distribution
+barplot(
+  table(MOSHOOFD),
+  main="Customer main type distribution"
+)
+
+# Purchase frequency
+barplot(
+  MOSHOOFD.purchase[, 2],
+  main="Customer main type ~ Purchase"
+)
 
 if (params.fileOutput) {
   dev.off()
-} 
-
-# Calculate the percentage of people who purchased a caravan policy in every group
-MOSHOOFD.purchase <- as.data.frame(MOSHOOFD.labels)
-MOSHOOFD.purchase$Count <- table(MOSHOOFD)
-MOSHOOFD.purchase$No <- table(MOSHOOFD, Purchase)[, 1]
-MOSHOOFD.purchase$No.Freq <- MOSHOOFD.purchase$No / MOSHOOFD.purchase$Count
-MOSHOOFD.purchase$Yes <- table(MOSHOOFD, Purchase)[, 2]
-MOSHOOFD.purchase$Yes.Freq <- MOSHOOFD.purchase$Yes / MOSHOOFD.purchase$Count
-
-# Plot the distribution
-if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-main-type-purchase.pdf"), width = 10, height = 10)
 }
 
-par(mar = c(10, 5, 5, 5))
-barplot(MOSHOOFD.purchase$Yes.Freq, names = MOSHOOFD.labels, main = "Customer main type ~ Purchase", las = 2)
+# Plot MOSHOOFD purchase frequency boxplot
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "customer-main-type-boxplot", sep=""), width=20, height=10)
+}
+
+par(mar=c(3, 3, 3, 3), mfrow=c(1, 2), cex=1.8)
+
+boxplot(
+  as.vector(table(MOSHOOFD)),
+  main="Group sizes boxplot"
+)
+
+boxplot(
+  MOSHOOFD.purchase[, 2],
+  main="Purchase frequency per group boxplot"
+)
 
 if (params.fileOutput) {
   dev.off()
 }
 
-# Label factors in MOSTYPE
-MOSTYPE.labels <- c("High Income","Very Important Provincials","High status seniors","Affluent senior apartments","Mixed seniors","Career and childcare","Dinki's (double income no kids)","Middle class families","Modern","Stable family","Family starters","Affluent young families","Young all american family","Junior cosmopolitan","Senior cosmopolitans","Students in apartments","Fresh masters in the city","Single youth","Suburban youth","Etnically diverse","Young urban have-nots","Mixed apartment dwellers","Young and rising","Young","Young seniors in the city","Own home elderly","Seniors in apartments","Residential elderly","Porchless seniors: no front yard","Religious elderly singles","Low income catholics","Mixed seniors","Lower class large families","Large family","Village families","Couples with teens 'Married with children'","Mixed small town dwellers","Traditional families","Large religous families","Large family farms","Mixed rurals")
+#
+# 5.3: MOSTYPE
+#
 
-# Create MOSTYPE distribution barplot
+# Calculate Purchase frequency per group
+MOSTYPE.purchase <- (table(MOSTYPE, Purchase) / as.vector(table(MOSTYPE)))
+
+# Save table to CSV
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-sub-type-distribution.pdf"), width = 10, height = 10)
+  write.csv(
+    cbind(table(MOSTYPE), MOSTYPE.purchase),
+    file=paste(params.outDir, "customer-sub-type.csv", sep="")
+  )
 }
 
-# Create MOSTYPE table and fill missing values with 0
-MOSTYPE.table <- as.vector(table(MOSTYPE))
-for (i in 1:41) {
-  if (!(i %in% MOSTYPE)) {
-    message(i)
-    MOSTYPE.table <- c(MOSTYPE.table[1:i-1], 0, MOSTYPE.table[i:length(MOSTYPE.table)])
+# Plot MOSTYPE distribution
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "customer-sub-type-distribution.pdf", sep=""), width=20, height=6)
+}
+
+par(mar=c(3, 3, 3, 3), cex=1.8)
+
+barplot(
+  table(MOSTYPE),
+  main="Customer subtype distribution"
+)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+# Plot MOSTYPE purchase frequency
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "customer-sub-type-frequency.pdf", sep=""), width=20, height=6)
+}
+
+par(mar=c(3, 3, 3, 3), cex=1.8)
+
+
+barplot(
+  MOSTYPE.purchase[, 2],
+  main="Customer subtype ~ Purchase"
+)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+# Plot MOSTYPE purchase frequency boxplot
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "customer-sub-type-boxplot", sep=""), width=20, height=10)
+}
+
+par(mar=c(3, 3, 3, 3), mfrow=c(1, 2), cex=1.8)
+
+boxplot(
+  as.vector(table(MOSTYPE)),
+  main="Subgroup sizes boxplot"
+)
+
+boxplot(
+  MOSTYPE.purchase[, 2],
+  main="Purchase frequency per group boxplot"
+)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+#
+# 5.4: MOSTYPE, MOSHOOFD relationship
+#
+
+# Distribution of subgroups
+MM <- table(MOSTYPE, MOSHOOFD)
+
+if (params.fileOutput) {
+  write.csv(MM, paste(params.outDir, "customer-types.csv", sep=""))
+}
+
+# Plot distribution of subgroups in every main type group
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "customer-subgroups-distribution.pdf", sep=""), width=25, height=10)
+}
+
+par(mfrow=c(2, 5), mar=c(3, 3, 3, 3), oma=c(0, 0, 6, 0), cex=1.8)
+
+for (i in 1:length(table(MOSHOOFD))) {
+  barplot(
+    MM[which(MM[, i] != 0), i],
+    main=paste(MOSHOOFD.labels[i])
+  )
+}
+
+mtext("Distribution of subgroups in each of customer main type groups", side=1, line=-25, cex=2.6, outer=TRUE, font=2)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+# Purchase frequency in subgroups
+MM.purchase <- table(MOSTYPE, Purchase)[, 2] / table(MOSTYPE, MOSHOOFD)
+MM.purchase[which(!is.finite(MM.purchase))] <- 0
+
+# Plot purchase frequency of subgroups in every main type group
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "customer-subgroups-purchase.pdf", sep=""), width=25, height=10)
+}
+
+par(mfrow=c(2, 5), mar=c(3, 3, 3, 3), oma=c(0, 0, 6, 0), cex=1.8)
+
+for (i in 1:length(table(MOSHOOFD))) {
+  barplot(
+    MM.purchase[which(MM[, i] != 0), i],
+    main=paste(MOSHOOFD.labels[i])
+  )
+}
+
+mtext("Purchase frequency of subgroups in each of customer main type groups", side=1, line=-25, cex=2.6, outer=TRUE, font=2)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+# Plot subgroup sizes, Purchase frequency barchart and boxplot combination for every group
+for (i in 1:length(table(MOSHOOFD))) {
+  if (params.fileOutput) {
+    pdf(paste(params.outDir, "group-", i, "-detail.pdf", sep=""), width=10, height=10)
   }
-}
 
-par(mar = c(5, 18, 5, 5), cex = 0.85)
-barplot(MOSTYPE.table, names = MOSTYPE.labels, main = "Customer subtype distribution", las =  2, horiz = TRUE)
+  par(mfrow=c(2, 2), mar=c(1, 3, 3, 3), oma=c(0, 0, 3, 0), cex=1.8)
 
-if (params.fileOutput) {
-  dev.off()
-} 
+  # Group size barplot
+  barplot(
+    MM[which(MM[, i] != 0), i],
+    main="Subgroups sizes"
+  )
 
-# Calculate the percentage of people who purchased a caravan policy in every group
-MOSTYPE.purchase <- as.data.frame(MOSTYPE.labels)
-MOSTYPE.purchase$Count <- MOSTYPE.table
-MOSTYPE.purchase$No <- table(MOSTYPE.table, Purchase)[, 1]
-MOSTYPE.purchase$No.Freq <- MOSTYPE.purchase$No / MOSTYPE.purchase$Count
-MOSTYPE.purchase$Yes <- table(MOSTYPE.table, Purchase)[, 2]
-MOSTYPE.purchase$Yes.Freq <- MOSTYPE.purchase$Yes / MOSTYPE.purchase$Count
+  # Purchase frequency barplot
+  barplot(
+    MM.purchase[which(MM[, i] != 0), i],
+    main="Purchase frequency"
+  )
 
-# Plot the distribution
-if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-main-type-purchase.pdf"), width = 10, height = 10)
-}
+  par(mar=c(3, 3, 3, 3))
 
-par(mar = c(10, 5, 5, 5))
-barplot(MOSTYPE.purchase$Yes.Freq, names = MOSTYPE.labels, main = "Customer main type ~ Purchase", las = 2)
+  # Group size boxplot
+  boxplot(
+    as.vector(MM[which(MM[, i] != 0), i])
+  )
 
-if (params.fileOutput) {
-  dev.off()
+  # Purchase frequency boxplot
+  boxplot(
+    as.vector(MM.purchase[which(MM[, i] != 0), i])
+  )
+
+  mtext(MOSHOOFD.labels[i], side=1, line=-26, cex=2.6, outer=TRUE, font=2)
+
+
+  if (params.fileOutput) {
+    dev.off()
+  }
+
 }
