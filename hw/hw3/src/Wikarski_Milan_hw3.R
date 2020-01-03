@@ -248,13 +248,26 @@ as.numeric(purchase.freq[2])
 # 5.2: MOSHOOFD
 #
 
+MOSHOOFD.labels <- c(
+  "Successfull hedonists (1)",
+  "Driven growers (2)",
+  "Average family (3)",
+  "Career loners (4)",
+  "Living well (5)",
+  "Cruising seniors (6)",
+  "Retired and religious (7)",
+  "Family with grown ups (8)",
+  "Convervative families (9)",
+  "Farmers (10)"
+)
+
 # Calculate Purchase frequency per group
 MOSHOOFD.purchase <- (table(MOSHOOFD, Purchase) / as.vector(table(MOSHOOFD)))
 
 # Save table to CSV
 if (params.fileOutput) {
   write.csv(
-    cbind(table(MOSHOOFD), MOSHOOFD.purchase),
+    as.data.frame(cbind(MOSHOOFD.labels, table(MOSHOOFD), paste(round(MOSHOOFD.purchase[, 2] * 100, 2), "%", sep=""))),
     file=paste(params.outDir, "customer-main-type.csv", sep="")
   )
 }
@@ -307,13 +320,57 @@ if (params.fileOutput) {
 # 5.3: MOSTYPE
 #
 
+MOSTYPE.labels <- c(
+  "High Income (1)",
+  "Very Important Provincials (2)",
+  "High status seniors (3)",
+  "Affluent senior apartments (4)",
+  "Mixed seniors (5)",
+  "Career and childcare (6)",
+  "Dinki's (double income no kids) (7)",
+  "Middle class families (8)",
+  "Modern (9)",
+  "Stable family (10)",
+  "Family starters (11)",
+  "Affluent young families (12)",
+  "Young all american family (13)",
+  "Junior cosmopolitan (14)",
+  "Senior cosmopolitans (15)",
+  "Students in apartments (16)",
+  "Fresh masters in the city (17)",
+  "Single youth (18)",
+  "Suburban youth (19)",
+  "Etnically diverse (20)",
+  "Young urban have-nots (21)",
+  "Mixed apartment dwellers (22)",
+  "Young and rising (23)",
+  "Young (24)",
+  "Young seniors in the city (25)",
+  "Own home elderly (26)",
+  "Seniors in apartments (27)",
+  "Residential elderly (28)",
+  "Porchless seniors: no front yard (29)",
+  "Religious elderly singles (30)",
+  "Low income catholics (31)",
+  "Mixed seniors (32)",
+  "Lower class large families (33)",
+  "Large family (34)",
+  "Village families (35)",
+  "Couples with teens 'Married with children' (36)",
+  "Mixed small town dwellers (37)",
+  "Traditional families (38)",
+  "Large religous families (39)",
+  "Large family farms (40)",
+  "Mixed rurals (41)"
+)
+
 # Calculate Purchase frequency per group
 MOSTYPE.purchase <- (table(MOSTYPE, Purchase) / as.vector(table(MOSTYPE)))
 
 # Save table to CSV
 if (params.fileOutput) {
   write.csv(
-    cbind(table(MOSTYPE), MOSTYPE.purchase),
+    as.data.frame(cbind(MOSTYPE.labels[sort(unique(MOSTYPE))], table(MOSTYPE), paste(round(MOSTYPE.purchase[, 2] * 100, 2), "%", sep=""))),
     file=paste(params.outDir, "customer-sub-type.csv", sep="")
   )
 }
