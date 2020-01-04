@@ -2,12 +2,9 @@
 # │
 # ├─ 1: Parameters
 # │
-# ├─ 2: Helper functions
-# │  ├─ 2.1: inc
-# │  ├─ 2.2: entropy 
-# │  └─ 2.3: binary.eval
+# ├─ 2: Initialization
 # │
-# ├─ 3: Initialization
+# ├─ 3: Helper functions
 # │
 # ├─ 4: Data Divison
 # │
@@ -15,7 +12,15 @@
 # │  ├─ 5.1: Traget feature distribution
 # │  ├─ 5.2: MOSHOOFD (1a)
 # │  ├─ 5.3: MOSTYPE (1a)
-# │  ├─ 5.4: MOSTYPE, MOSHOOFD relationship (1b)
+# │  └─ 5.4: MOSTYPE, MOSHOOFD relationship (1b)
+# │
+# ├─ 6: Model fitting, optimization and selection (Task 2)
+# │  ├─ 6.1: Decision Tree
+# │  ├─ 6.2: Random Forest
+# │  ├─ 6.3: Regularized Logistic Regression
+# │  ├─ 6.4: Models Testing and Comparison
+# │  └─ 6.5: Best Model
+#
 #
 # used: │, ├, ─, └
 
@@ -26,12 +31,11 @@
 #
 #
 
-#########################################
-##           1: PARAMETERS             ##
-#########################################
+########################################################
+##                    1: PARAMETERS                   ##
+########################################################
 params.workDir <- '~/School/NPFL054/hw/hw3'
 params.outDir <- 'out/'
-params.libPaths <- '~/R/libs'
 params.checkPackages <- FALSE
 
 params.fileOutput <- TRUE
@@ -39,6 +43,7 @@ params.fileOutput <- TRUE
 params.seed <- 4356
 
 params.testSize <- 1000
+params.folds <- 10
 
 #
 #
@@ -47,92 +52,15 @@ params.testSize <- 1000
 #
 #
 
-#########################################
-##        2: HELPER FUNCTIONS          ##
-#########################################
-
-inc <- function(x) {
- eval.parent(substitute(x <- x + 1))
-}
-
-entropy <- function(p) {
-  if (sum(p) == 0) {
-    return(0)
-  }
-
-  p <- p / sum(p)
-  p <- p[p > 0] # Discard zero entries
-
-  H <- -sum(p*log(p,base=2))
-
-  return(H)
-}
-
-binary.eval <- function(predictedValues, trueValues) {
-  # Convert predicted and true values to vectors
-  predictedValues <- as.vector(predictedValues)
-  trueValues <- as.vector(trueValues)
-
-  # Check the length
-  if (length(predictedValues) != length(trueValues)) {
-    stop('[predictedValues] and [trueValues] are of different length')
-  }
-
-  res <- list()
-
-  # res$prediction <- predictedValues
-  # res$truth <- trueValues
-
-  res$confusion.matrix <- matrix(data=c(0, 0, 0, 0), nrow=2, ncol=2)
-
-  dimnames(res$confusion.matrix) <- list(
-    c('Truly positive', 'Truly negative'),
-    c('Predicted positive', 'Predicted negative')
-  )
-
-  for (i in 1:length(predictedValues)) {
-    inc(res$confusion.matrix[
-      ifelse(trueValues[i] == 1, 1, 2),
-      ifelse(predictedValues[i] == 1, 1, 2)
-    ])
-  }
-
-  res$true.positive  <- res$confusion.matrix[1, 1]
-  res$false.positive <- res$confusion.matrix[2, 1]
-  res$false.negative <- res$confusion.matrix[1, 2]
-  res$true.negative  <- res$confusion.matrix[2, 2]
-
-  res$precision <- res$true.positive / (res$true.positive + res$false.positive)
-  res$recall <- res$true.positive / (res$true.positive + res$false.negative)
-  res$specificity <- res$true.negative / (res$true.negative + res$false.positive)
-
-  res$F.score <- 2 * res$precision * res$recall / (res$recall + res$precision) 
-
-  res$accuracy <- (res$true.positive + res$true.negative) / sum(res$confusion.matrix)
-  res$error <- 1 - res$accuracy
-
-  return(res)
-}
-
-#
-#
-#
-#
-#
-#
-
-#########################################
-##         3: Initialization           ##
-#########################################
+########################################################
+##                  2: INITIALIZATION                 ##
+########################################################
 
 # Set working directry and load data
 setwd(params.workDir)
 
 # Set seed
 set.seed(params.seed)
-
-# Setup libs directory
-.libPaths(params.libPaths)
 
 # Load packages
 if (params.checkPackages) {
@@ -153,16 +81,24 @@ if (params.checkPackages) {
   if (!("randomForest" %in% packages)) {
     install.packages("randomForest")
   }
+  if (!("pROC" %in% packages)) {
+    install.packages("pROC")
+  }
+  if (!("ROCR" %in% packages)) {
+    install.packages("ROCR")
+  }
 }
 
 library(ISLR)
 library(rpart)
-# library(rpart.plot)
-# library(RColorBrewer)
-# library(randomForest)
+library(rpart.plot)
+library(RColorBrewer)
+library(randomForest)
+library(pROC)
+library(ROCR)
  
 # Global chart parameters
-par(cex=1.5, xpd=TRUE)
+par(xpd=TRUE)
 
 # Create /out directory
 if (params.fileOutput && !dir.exists(params.outDir)) {
@@ -172,6 +108,7 @@ if (params.fileOutput && !dir.exists(params.outDir)) {
 # Choose colors
 colors <- sample(grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), invert=T)], 30)
 
+
 #
 #
 #
@@ -179,11 +116,45 @@ colors <- sample(grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), inver
 #
 #
 
-#########################################
-##          4: Data Division           ##
-#########################################
+########################################################
+##                 3: HELPER FUNCTIONS                ##
+########################################################
+
+cv.split.safe <- function(data, prop, value, folds=10) {
+  data.positive.indexes <- which(data[, prop] == value)
+  data.negative.indexes <- which(data[, prop] != value)
+
+  data.positive <- data.frame(index=sample(data.positive.indexes))
+  data.positive$fold <- cut(seq(1, nrow(data.positive)), breaks=folds, labels=FALSE)
+
+  data.negative <- data.frame(index=sample(data.negative.indexes))
+  data.negative$fold <- cut(seq(1, nrow(data.negative)), breaks=folds, labels=FALSE)
+
+  res <- list()
+
+  for (i in 1:folds) {
+    res[[i]] <- c(
+      data.positive[which(data.positive$fold == i), 1],
+      data.negative[which(data.negative$fold == i), 1]
+    )
+  }
+
+  return (res)
+}
+
+#
+#
+#
+#
+#
+#
+
+########################################################
+##                   4: DATA DIVISION                 ##
+########################################################
 
 # Load data
+# data <- as.data.frame(lapply(Caravan, factor))
 data <- Caravan
 attach(data)
 
@@ -207,9 +178,9 @@ data.test <- data[indexes.test, ]
 #
 #
 
-#########################################
-##          5: Data analysis           ##
-#########################################
+########################################################
+##                  5: DATA ANALYSIS                  ##
+########################################################
 
 #
 # 5.1: Target attribute distribution
@@ -518,9 +489,88 @@ for (i in 1:length(table(MOSHOOFD))) {
 
   mtext(MOSHOOFD.labels[i], side=1, line=-26, cex=2.6, outer=TRUE, font=2)
 
-
   if (params.fileOutput) {
     dev.off()
   }
 
 }
+
+#
+#
+#
+#
+#
+#
+
+########################################################
+##    6: MODEL FITTING, OPTIMIZATION AND SELECTION    ##
+########################################################
+
+data.cv <- cv.split.safe(data.train, prop="Purchase", value="Yes", folds=params.folds)
+
+#
+# 6.1: Decision Tree
+#
+
+
+
+tree.eval <- list()
+tree.cp <- 1:50 / 100
+
+for (i in 1:length(tree.cp)) {
+  cp <- tree.cp[i]
+
+  if (params.fileOutput) {
+    if (!dir.exists(paste(params.outDir, "decision-tree", sep=""))) {
+      dir.create(paste(params.outDir, "decision-tree", sep=""))
+    }
+
+    pdf(paste(params.outDir, "decision-tree/cp-", cp, ".pdf", sep=""), width=25, height=10)
+  }
+
+  par(mfrow=c(2, 5), cex=1.8, mar=c(0, 0, 0, 0))
+
+  tree.eval.auc <- c()
+
+  for (k in 1:params.folds) {
+    data.cv.train <- data.train[-data.cv[[k]], ]
+    data.cv.test <- data.train[data.cv[[k]], ]
+
+    tree <- rpart(
+      formula=Purchase ~ .,
+      data=data.cv.train,
+      cp=cp,
+      model=TRUE,
+    )
+
+    tree.roc <- roc(
+      data.cv.test$Purchase,
+      predict(tree, data.cv.test)[, 2],
+      partial.auc=c(1, 0.8),
+      levels=c("Yes", "No"),
+      direction=">",
+      plot=TRUE,
+      lagacy.axes=TRUE,
+      xlab="FPR",
+      ylab="TPR",
+      polygon=TRUE
+    )
+
+    tree.eval.auc <- c(tree.eval.auc, as.numeric(tree.roc$auc))
+  }
+
+  if (params.fileOutput) {
+    dev.off()
+  }
+
+  message(paste("CP value set to", cp))
+  print(tree.eval.auc)
+
+  tree.eval[[i]] <- tree.eval.auc
+}
+
+
+#
+# 6.2 Random Forest
+#
+
