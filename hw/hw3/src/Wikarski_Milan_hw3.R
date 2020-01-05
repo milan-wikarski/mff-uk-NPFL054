@@ -20,6 +20,8 @@
 # │  ├─ 6.3: Regularized Logistic Regression
 # │  ├─ 6.4: Models Testing and Comparison
 # │  └─ 6.5: Best Model
+# │
+# ├─ 7: Model interpretation and feature selection (Task 3)
 #
 #
 # used: │, ├, ─, └
@@ -39,11 +41,14 @@ params.outDir <- 'out/'
 params.checkPackages <- FALSE
 
 params.fileOutput <- TRUE
+params.readDataFromFiles <- FALSE
 
 params.seed <- 4356
 
 params.testSize <- 1000
+params.predictPositive <- 100
 params.folds <- 10
+params.alpha <- 0.05
 
 #
 #
@@ -87,6 +92,9 @@ if (params.checkPackages) {
   if (!("ROCR" %in% packages)) {
     install.packages("ROCR")
   }
+  if (!("glmnet" %in% packages)) {
+    install.packages("glmnet")
+  }
 }
 
 library(ISLR)
@@ -96,6 +104,7 @@ library(RColorBrewer)
 library(randomForest)
 library(pROC)
 library(ROCR)
+library(glmnet)
  
 # Global chart parameters
 par(xpd=TRUE)
@@ -120,7 +129,7 @@ colors <- sample(grDevices::colors()[grep('gr(a|e)y', grDevices::colors(), inver
 ##                 3: HELPER FUNCTIONS                ##
 ########################################################
 
-cv.split.safe <- function(data, prop, value, folds=10) {
+cv.split.safe <- function(data, prop, value, folds) {
   data.positive.indexes <- which(data[, prop] == value)
   data.negative.indexes <- which(data[, prop] != value)
 
@@ -142,6 +151,86 @@ cv.split.safe <- function(data, prop, value, folds=10) {
   return (res)
 }
 
+error.bars <- function(x, y0, y1, step) {
+  segments(x0=x, y0=y0, y1=y1)
+  segments(x0=x - step, x1=x + step, y0=y0)
+  segments(x0=x - step, x1=x + step, y0=y1)
+}
+
+predict.100 <- function(model, data) {
+  model.pred.prob <- predict(model, data, type="prob")[, 2]
+  model.pred <- rep(0, 1000)
+  model.pred[order(model.pred.prob)[901:1000]] <- 1
+
+  return (model.pred)
+}
+
+predict.100.eval <- function(model, data, target) {
+  res = list()
+  
+  res$confusion.matrix <- table(as.numeric(target) - 1, predict.100(model, data))
+  res$precision <- res$confusion.matrix[4] / 100
+
+  # model.pred.prob <- predict(model, data.test, type="prob")[, 2]
+  # model.pred <- rep(0, 1000)
+  # table(data.test[rownames(subset(data.frame(model.pred.prob, model.pred), model.pred == 1)), 86]) # Alternative way  
+
+  return (res)
+}
+
+auc.quick <- function(
+  truth,
+  prediction,
+  fpr.stop=0.2,
+  levels=c("No", "Yes"),
+  direction="<"
+) {
+  r <- roc(
+    truth,
+    prediction,
+    partial.auc=c(1, 1-fpr.stop),
+    levels=levels,
+    direction=direction
+  )
+
+  return (as.numeric(r$auc))
+}
+
+auc.summary <- function(auc) {
+  res <- c(mean(auc), sd(auc))
+
+  if (length(unique(auc)) == 1) {
+    res <- c(res, mean(auc), mean(auc))
+  } else {
+    T <- t.test(auc)
+    res <- c(res, T$conf.int[1], T$conf.int[2])
+  }
+
+  return (res)
+}
+
+better.than <- function(auc.many) {
+  res <- c()
+
+  for (i in 1:nrow(auc.many)) {
+    count <- 0
+    A <- unlist(auc.many[i, 1:10])
+
+    for (j in 1:nrow(auc.many)) {
+      B <- unlist(auc.many[j, 1:10]) 
+      p.value <- t.test(A, B, paired=TRUE)$p.value
+
+      if (!is.nan(p.value) && p.value < params.alpha && mean(A) > mean(B)) {
+        count <- count + 1
+      }
+    }
+
+    res <- c(res, count)
+  }
+
+  return (res)
+}
+
 #
 #
 #
@@ -154,13 +243,14 @@ cv.split.safe <- function(data, prop, value, folds=10) {
 ########################################################
 
 # Load data
+data <- cbind(as.data.frame(lapply(Caravan[, 1:64], factor)), Caravan[, 65:86])
 # data <- as.data.frame(lapply(Caravan, factor))
-data <- Caravan
+# data <- Caravan
 attach(data)
 
 # Randomly select indexes
 indexes.all <- c(1: nrow(data))
-indexes.test <- sample(indexes.all, params.testSize)
+indexes.test <- sort(sample(indexes.all, params.testSize))
 indexes.train <- indexes.all[is.na(pmatch(indexes.all, indexes.test))]
 
 if (length(intersect(indexes.test, indexes.train)) != 0) {
@@ -190,7 +280,7 @@ purchase.freq <- table(Purchase) / nrow(data)
 
 # Barplot of target feature distribution
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "target-attribute-frequency.pdf", sep=""), width=10, height=10)
+  pdf(paste(params.outDir, "data-analysis/target-attribute-frequency.pdf", sep=""), width=10, height=10)
 }
 
 par(mar=c(3, 3, 3, 3), cex=1.8)
@@ -239,13 +329,13 @@ MOSHOOFD.purchase <- (table(MOSHOOFD, Purchase) / as.vector(table(MOSHOOFD)))
 if (params.fileOutput) {
   write.csv(
     as.data.frame(cbind(MOSHOOFD.labels, table(MOSHOOFD), paste(round(MOSHOOFD.purchase[, 2] * 100, 2), "%", sep=""))),
-    file=paste(params.outDir, "customer-main-type.csv", sep="")
+    file=paste(params.outDir, "data-analysis/customer-main-type.csv", sep="")
   )
 }
 
 # Plot MOSHOOFD
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-main-type.pdf", sep=""), width=20, height=6)
+  pdf(paste(params.outDir, "data-analysis/customer-main-type.pdf", sep=""), width=20, height=6)
 }
 
 par(mar=c(3, 3, 3, 3), mfrow=c(1, 2), cex=1.8)
@@ -268,7 +358,7 @@ if (params.fileOutput) {
 
 # Plot MOSHOOFD purchase frequency boxplot
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-main-type-boxplot", sep=""), width=20, height=10)
+  pdf(paste(params.outDir, "data-analysis/customer-main-type-boxplot", sep=""), width=20, height=10)
 }
 
 par(mar=c(3, 3, 3, 3), mfrow=c(1, 2), cex=1.8)
@@ -342,13 +432,13 @@ MOSTYPE.purchase <- (table(MOSTYPE, Purchase) / as.vector(table(MOSTYPE)))
 if (params.fileOutput) {
   write.csv(
     as.data.frame(cbind(MOSTYPE.labels[sort(unique(MOSTYPE))], table(MOSTYPE), paste(round(MOSTYPE.purchase[, 2] * 100, 2), "%", sep=""))),
-    file=paste(params.outDir, "customer-sub-type.csv", sep="")
+    file=paste(params.outDir, "data-analysis/customer-sub-type.csv", sep="")
   )
 }
 
 # Plot MOSTYPE distribution
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-sub-type-distribution.pdf", sep=""), width=20, height=6)
+  pdf(paste(params.outDir, "data-analysis/customer-sub-type-distribution.pdf", sep=""), width=20, height=6)
 }
 
 par(mar=c(3, 3, 3, 3), cex=1.8)
@@ -364,7 +454,7 @@ if (params.fileOutput) {
 
 # Plot MOSTYPE purchase frequency
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-sub-type-frequency.pdf", sep=""), width=20, height=6)
+  pdf(paste(params.outDir, "data-analysis/customer-sub-type-frequency.pdf", sep=""), width=20, height=6)
 }
 
 par(mar=c(3, 3, 3, 3), cex=1.8)
@@ -381,7 +471,7 @@ if (params.fileOutput) {
 
 # Plot MOSTYPE purchase frequency boxplot
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-sub-type-boxplot", sep=""), width=20, height=10)
+  pdf(paste(params.outDir, "data-analysis/customer-sub-type-boxplot", sep=""), width=20, height=10)
 }
 
 par(mar=c(3, 3, 3, 3), mfrow=c(1, 2), cex=1.8)
@@ -408,12 +498,12 @@ if (params.fileOutput) {
 MM <- table(MOSTYPE, MOSHOOFD)
 
 if (params.fileOutput) {
-  write.csv(MM, paste(params.outDir, "customer-types.csv", sep=""))
+  write.csv(MM, paste(params.outDir, "data-analysis/customer-types.csv", sep=""))
 }
 
 # Plot distribution of subgroups in every main type group
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-subgroups-distribution.pdf", sep=""), width=25, height=10)
+  pdf(paste(params.outDir, "data-analysis/customer-subgroups-distribution.pdf", sep=""), width=25, height=10)
 }
 
 par(mfrow=c(2, 5), mar=c(3, 3, 3, 3), oma=c(0, 0, 6, 0), cex=1.8)
@@ -437,7 +527,7 @@ MM.purchase[which(!is.finite(MM.purchase))] <- 0
 
 # Plot purchase frequency of subgroups in every main type group
 if (params.fileOutput) {
-  pdf(paste(params.outDir, "customer-subgroups-purchase.pdf", sep=""), width=25, height=10)
+  pdf(paste(params.outDir, "data-analysis/customer-subgroups-purchase.pdf", sep=""), width=25, height=10)
 }
 
 par(mfrow=c(2, 5), mar=c(3, 3, 3, 3), oma=c(0, 0, 6, 0), cex=1.8)
@@ -458,7 +548,7 @@ if (params.fileOutput) {
 # Plot subgroup sizes, Purchase frequency barchart and boxplot combination for every group
 for (i in 1:length(table(MOSHOOFD))) {
   if (params.fileOutput) {
-    pdf(paste(params.outDir, "group-", i, "-detail.pdf", sep=""), width=10, height=10)
+    pdf(paste(params.outDir, "data-analysis/group-", i, "-detail.pdf", sep=""), width=10, height=10)
   }
 
   par(mfrow=c(2, 2), mar=c(1, 3, 3, 3), oma=c(0, 0, 3, 0), cex=1.8)
@@ -512,65 +602,377 @@ data.cv <- cv.split.safe(data.train, prop="Purchase", value="Yes", folds=params.
 # 6.1: Decision Tree
 #
 
+# SECTION Decision Tree
+if (params.readDataFromFiles) {
 
+  tree.eval <- as.data.frame(read.table(paste(params.outDir, "decision-tree/decision-tree-eval.csv", sep=""), header=TRUE, sep=",")[, -1])
 
-tree.eval <- list()
-tree.cp <- 1:50 / 100
+  tree.eval.auc.total <- as.data.frame(read.table(paste(params.outDir, "decision-tree/decision-tree-eval-auc.csv", sep=""), header=TRUE, sep=",")[, -1])
 
-for (i in 1:length(tree.cp)) {
-  cp <- tree.cp[i]
+} else {
 
-  if (params.fileOutput) {
-    if (!dir.exists(paste(params.outDir, "decision-tree", sep=""))) {
-      dir.create(paste(params.outDir, "decision-tree", sep=""))
+  # Setup eval data frame
+  tree.eval <- data.frame(
+    cp=seq(from=0.0001, to=0.01, by=0.0002),
+    AUC.mean=NaN,
+    AUC.std=NaN,
+    AUC.CI.low=NaN,
+    AUC.CI.high=NaN
+  )
+
+  tree.eval.auc.total <- c()
+
+  for (i in 1:nrow(tree.eval)) {
+    cp <- tree.eval[i, "cp"]
+
+    tree.eval.auc <- c()
+
+    for (k in 1:params.folds) {
+      # Take train and test data for this iteration of CV
+      data.cv.train <- data.train[-data.cv[[k]], ]
+      data.cv.test <- data.train[data.cv[[k]], ]
+
+      # Build a decision tree
+      tree <- rpart(
+        formula=Purchase ~ .,
+        data=data.cv.train,
+        cp=cp,
+        model=TRUE
+      )
+
+      # Compute AUC
+      tree.auc <- auc.quick(data.cv.test$Purchase, predict(tree, data.cv.test)[, 2])
+
+      # Save performance measurements
+      tree.eval.auc <- c(tree.eval.auc, tree.auc)
+      tree.eval.auc.total <- c(tree.eval.auc.total, tree.auc)
     }
 
-    pdf(paste(params.outDir, "decision-tree/cp-", cp, ".pdf", sep=""), width=25, height=10)
+    message(paste("CP value set to", cp))
+    print(tree.eval.auc)
+
+    # Calculate mean, std and CI
+    tree.eval[i, 2:5] <- auc.summary(tree.eval.auc)
+
+    print(tree.eval[i, ])
   }
 
-  par(mfrow=c(2, 5), cex=1.8, mar=c(0, 0, 0, 0))
+  # Convert all AUC_0.2 measurements into a data frame
+  tree.eval.auc.total <- cbind(as.data.frame(matrix(tree.eval.auc.total, nrow=nrow(tree.eval), byrow=TRUE)), cp=tree.eval$cp)
 
-  tree.eval.auc <- c()
+  # Perform paired t-test for each pair to compute better.than
+  tree.eval <- cbind(tree.eval, better.than=better.than(tree.eval.auc.total))  
 
-  for (k in 1:params.folds) {
-    data.cv.train <- data.train[-data.cv[[k]], ]
-    data.cv.test <- data.train[data.cv[[k]], ]
-
-    tree <- rpart(
-      formula=Purchase ~ .,
-      data=data.cv.train,
-      cp=cp,
-      model=TRUE,
-    )
-
-    tree.roc <- roc(
-      data.cv.test$Purchase,
-      predict(tree, data.cv.test)[, 2],
-      partial.auc=c(1, 0.8),
-      levels=c("Yes", "No"),
-      direction=">",
-      plot=TRUE,
-      lagacy.axes=TRUE,
-      xlab="FPR",
-      ylab="TPR",
-      polygon=TRUE
-    )
-
-    tree.eval.auc <- c(tree.eval.auc, as.numeric(tree.roc$auc))
-  }
-
+  # Save parameter tuning data to .csv files
   if (params.fileOutput) {
-    dev.off()
+    write.csv(tree.eval, file=paste(params.outDir, "decision-tree/decision-tree-eval.csv", sep=""))
+
+    write.csv(tree.eval.auc.total, file=paste(params.outDir, "decision-tree/decision-tree-eval-auc.csv", sep=""))
   }
-
-  message(paste("CP value set to", cp))
-  print(tree.eval.auc)
-
-  tree.eval[[i]] <- tree.eval.auc
 }
 
+# Plot AUC_0.2 mean and confidence intervals
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "decision-tree/decision-tree-eval.pdf", sep=""), width=10, height=10)
+}
+
+par(cex=1.3, mar=c(5, 5, 5, 5))
+
+plot(
+  x=tree.eval$cp,
+  y=tree.eval$AUC.mean,
+  ylim=c(0, 0.1),
+  type="o",
+  main="Performance of decision tree model for different values of cp",
+  xlab="CP",
+  ylab="Mean AUC_0.2",
+)
+
+error.bars(
+  x=tree.eval$cp,
+  y0=tree.eval$AUC.CI.low,
+  y1=tree.eval$AUC.CI.high,
+  step=0.00005
+)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+# Plot the results of t-tests
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "decision-tree/decision-tree-comparison.pdf", sep=""), width=10, height=10)
+}
+
+par(cex=1.3, mar=c(5, 5, 5, 5))
+
+plot(
+  x=tree.eval$cp,
+  y=tree.eval$better.than,
+  type="o",
+  main="Performance of decision tree model for different values of cp",
+  xlab="CP",
+  ylab="Better than n values",
+)
+
+if (params.fileOutput) {
+  dev.off()
+}
+# !SECTION
 
 #
 # 6.2 Random Forest
 #
+
+# This block of code is used to tune multiple parameters using different ranges of values. The code has to be changed manually before tuning each parameter give a particular value range.
+
+# Parameter tuning takes a long time. Comment the whole section out to skip parameter tuning. Best parameters are declared explicitly in the 6.4 section. Please check the report for their explanation
+
+# SECTION Random Forest
+# if (params.readDataFromFiles) {
+
+#   forest.eval <- as.data.frame(read.table(paste(params.outDir, "random-forest/random-forest-eval.csv", sep=""), header=TRUE, sep=",")[, -1])
+
+#   forest.eval.auc.total <- as.data.frame(read.table(paste(params.outDir, "random-forest/random-forest-eval-auc.csv", sep=""), header=TRUE, sep=",")[, -1])
+
+# } else {
+
+#   # Setup eval data frame
+#   forest.eval <- data.frame(
+#     cp=round(seq(1, 30) ** 1.25),
+#     AUC.mean=NaN,
+#     AUC.std=NaN,
+#     AUC.CI.low=NaN,
+#     AUC.CI.high=NaN
+#   )
+
+#   forest.eval.auc.total <- c()
+
+#   for (i in 1:nrow(forest.eval)) {
+#     ntree <- forest.eval[i, "ntree"]
+
+#     forest.eval.auc <- c()
+
+#     for (k in 1:params.folds) {
+#       # Take train and test data for this iteration of CV
+#       data.cv.train <- data.train[-data.cv[[k]], ]
+#       data.cv.test <- data.train[data.cv[[k]], ]
+
+#       # Build a random forest
+#       forest <- randomForest(
+#         formula=Purchase ~ .,
+#         data=data.cv.train,
+#         ntree=ntree
+#       )
+
+#       # Compute AUC
+#       forest.auc <- auc.quick(data.cv.test$Purchase, predict(forest, data.cv.test, type="prob")[, 2])
+
+#       # Save performance measurements
+#       forest.eval.auc <- c(forest.eval.auc, forest.auc)
+#       forest.eval.auc.total <- c(forest.eval.auc.total, forest.auc)
+#     }
+
+#     message(paste("ntree value set to", ntree))
+#     print(forest.eval.auc)
+
+#     # Calculate mean, std and CI
+#     forest.eval[i, 2:5] <- auc.summary(forest.eval.auc)
+
+#     print(forest.eval[i, ])
+#   }
+
+#   # Convert all AUC_0.2 measurements into a data frame
+#   forest.eval.auc.total <- cbind(as.data.frame(matrix(forest.eval.auc.total, nrow=nrow(forest.eval), byrow=TRUE)), ntree=forest.eval$ntree)
+
+#   # Perform paired t-test for each pair to compute better.than
+#   forest.eval <- cbind(forest.eval, better.than=better.than(forest.eval.auc.total))  
+
+#   # Save parameter tuning data to .csv files
+#   if (params.fileOutput) {
+#     write.csv(forest.eval, file=paste(params.outDir, "random-forest/random-forest-eval.csv", sep=""))
+
+#     write.csv(forest.eval.auc.total, file=paste(params.outDir, "random-forest/random-forest-eval-auc.csv", sep=""))
+#   }
+# }
+
+# # Plot AUC_0.2 mean and confidence intervals
+# if (params.fileOutput) {
+#   pdf(paste(params.outDir, "random-forest/random-forest-eval.pdf", sep=""), width=10, height=10)
+# }
+
+# par(cex=1.3, mar=c(5, 5, 5, 5))
+
+# plot(
+#   x=forest.eval$ntree,
+#   y=forest.eval$AUC.mean,
+#   ylim=c(0, 0.1),
+#   type="o",
+#   main="Performance of random forest model for different values of ntree\nx = round(seq(1, 30) ** 1.25)",
+#   xlab="ntree",
+#   ylab="Mean AUC_0.2",
+# )
+
+# error.bars(
+#   x=forest.eval$ntree,
+#   y0=forest.eval$AUC.CI.low,
+#   y1=forest.eval$AUC.CI.high,
+#   step=0.5
+# )
+
+# if (params.fileOutput) {
+#   dev.off()
+# }
+
+# # Plot the results of t-tests
+# if (params.fileOutput) {
+#   pdf(paste(params.outDir, "random-forest/random-forest-comparison.pdf", sep=""), width=10, height=10)
+# }
+
+# par(cex=1.3, mar=c(5, 5, 5, 5))
+
+# plot(
+#   x=forest.eval$ntree,
+#   y=forest.eval$better.than,
+#   type="o",
+#   main="Performance of random forest model for different values of ntree\nround(seq(1, 30) ** 1.25)",
+#   xlab="ntree",
+#   ylab="Better than n values",
+# )
+
+# if (params.fileOutput) {
+#   dev.off()
+# }
+
+# !SECTION 
+
+#
+# 6.3 Regularized Logistic Regression
+#
+
+# alpha <- 0.5
+
+# x <- model.matrix(Purchase ~ ., data=data.train)[, -1]
+# y <- ifelse(data.train$Purchase == "Yes", 1, 0)
+
+# x.test <- model.matrix(Purchase ~ ., data=data.test)[, -1]
+
+# lasso.cv <- cv.glmnet(x, y, family="binomial", alpha=alpha)
+# lasso <- glmnet(x, y, family="binomial", alpha=alpha, lambda=lasso.cv$lambda.min)
+
+# probs <- predict(lasso, newx=x.test)
+
+#
+# 6.4 Models Testing and Comparison
+#
+
+# #
+# Decision Tree
+
+# cp.best <- 0.0025
+
+# tree <- rpart(
+#   formula=Purchase ~ .,
+#   data=data.train,
+#   cp=cp.best
+# )
+
+# tree.eval <- predict.100.eval(tree, data.test, data.test$Purchase)
+
+# if (params.fileOutput) {
+#   pdf(paste(params.outDir, "decision-tree/decision-tree-best-roc.pdf", sep=""), width=10, height=10)
+# }
+
+# par(cex=1.3)
+
+# tree.roc <- roc(
+#   data.test$Purchase,
+#   predict(tree, data.test, type="prob")[, 2],
+#   partial.auc=c(1, 0.8),
+#   legacy.axes=TRUE,
+#   plot=TRUE,
+#   levels=c("No", "Yes"),
+#   direction="<",
+#   print.auc=TRUE,
+#   auc.polygon=TRUE,
+#   mar=c(6, 6, 6, 6),
+#   main=paste("AUC_0.2 for Decision Tree\ncp = ", cp.best, "\nprecision = ", tree.eval$precision, sep="")
+# )
+
+# if (params.fileOutput) {
+#   dev.off()
+# }
+
+# message("Decision Tree")
+# print(tree.eval)
+# print(tree.roc$auc)
+
+# # Plot the tree
+# if (params.fileOutput) {
+#   pdf(paste(params.outDir, "decision-tree/decision-tree-best.pdf", sep=""), width=20, height=10)
+# }
+
+# rpart.plot(tree)
+
+# if (params.fileOutput) {
+#   dev.off()
+# }
+
+# #
+# Random Forest
+
+# ntree.best <- 1000
+# mtry.best <- 15
+
+# forest <- randomForest(
+#   formula=Purchase ~ .,
+#   data=data.train,
+#   ntree=ntree.best,
+#   mtry=mtry.best
+# )
+
+# forest.eval <- predict.100.eval(forest, data.test, data.test$Purchase)
+
+# if (params.fileOutput) {
+#   pdf(paste(params.outDir, "random-forest/random-forest-best-roc.pdf", sep=""), width=10, height=10)
+# }
+
+# par(cex=1.3)
+
+# forest.roc <- roc(
+#   data.test$Purchase,
+#   predict(forest, data.test, type="prob")[, 2],
+#   partial.auc=c(1, 0.8),
+#   legacy.axes=TRUE,
+#   plot=TRUE,
+#   levels=c("No", "Yes"),
+#   direction="<",
+#   print.auc=TRUE,
+#   auc.polygon=TRUE,
+#   mar=c(6, 6, 6, 6),
+#   main=paste("AUC_0.2 for Random Forest\nntree = ", ntree.best, "\nmtry = ", mtry.best, "\nprecision = ", forest.eval$precision, sep="")
+# )
+
+# if (params.fileOutput) {
+#   dev.off()
+# }
+
+# # Feature importance
+# forest.importance <- data.frame(feature=rownames(forest$importance), importance=forest$importance)
+# forest.importance <- forest.importance[rev(order(forest.importance[, 2])), ]
+
+# message("Random Forest")
+# print(forest.eval)
+# print(forest.roc$auc)
+
+#
+#
+#
+#
+#
+#
+
+########################################################
+##    7: MODEL INTERPRETATION AND FEATURE SELECTION   ##
+########################################################
 
