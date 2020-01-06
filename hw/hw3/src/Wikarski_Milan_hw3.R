@@ -50,7 +50,7 @@ params.outDir <- 'out/'
 params.checkPackages <- FALSE
 
 params.fileOutput <- TRUE
-params.readDataFromFiles <- FALSE
+params.readDataFromFiles <- TRUE
 
 params.seed <- 4356
 
@@ -217,28 +217,6 @@ auc.summary <- function(auc) {
   } else {
     T <- t.test(auc)
     res <- c(res, T$conf.int[1], T$conf.int[2])
-  }
-
-  return (res)
-}
-
-better.than <- function(auc.many) {
-  res <- c()
-
-  for (i in 1:nrow(auc.many)) {
-    count <- 0
-    A <- unlist(auc.many[i, 1:10])
-
-    for (j in 1:nrow(auc.many)) {
-      B <- unlist(auc.many[j, 1:10]) 
-      p.value <- t.test(A, B, paired=TRUE)$p.value
-
-      if (!is.nan(p.value) && p.value < params.alpha && mean(A) > mean(B)) {
-        count <- count + 1
-      }
-    }
-
-    res <- c(res, count)
   }
 
   return (res)
@@ -668,9 +646,6 @@ data.cv <- cv.split.safe(data.train, prop="Purchase", value="Yes", folds=params.
 #   # Convert all AUC_0.2 measurements into a data frame
 #   tree.eval.auc.total <- cbind(as.data.frame(matrix(tree.eval.auc.total, nrow=nrow(tree.eval), byrow=TRUE)), cp=tree.eval$cp)
 
-#   # Perform paired t-test for each pair to compute better.than
-#   tree.eval <- cbind(tree.eval, better.than=better.than(tree.eval.auc.total))  
-
 #   # Save parameter tuning data to .csv files
 #   if (params.fileOutput) {
 #     write.csv(tree.eval, file=paste(params.outDir, "decision-tree/decision-tree-eval.csv", sep=""))
@@ -701,26 +676,6 @@ data.cv <- cv.split.safe(data.train, prop="Purchase", value="Yes", folds=params.
 #   y0=tree.eval$AUC.CI.low,
 #   y1=tree.eval$AUC.CI.high,
 #   step=0.00005
-# )
-
-# if (params.fileOutput) {
-#   dev.off()
-# }
-
-# # Plot the results of t-tests
-# if (params.fileOutput) {
-#   pdf(paste(params.outDir, "decision-tree/decision-tree-comparison.pdf", sep=""), width=10, height=10)
-# }
-
-# par(cex=1.3, mar=c(5, 5, 5, 5))
-
-# plot(
-#   x=tree.eval$cp,
-#   y=tree.eval$better.than,
-#   type="o",
-#   main="Performance of decision tree model for different values of cp",
-#   xlab="CP",
-#   ylab="Better than n values",
 # )
 
 # if (params.fileOutput) {
@@ -791,9 +746,6 @@ data.cv <- cv.split.safe(data.train, prop="Purchase", value="Yes", folds=params.
 #   # Convert all AUC_0.2 measurements into a data frame
 #   forest.eval.auc.total <- cbind(as.data.frame(matrix(forest.eval.auc.total, nrow=nrow(forest.eval), byrow=TRUE)), ntree=forest.eval$ntree)
 
-#   # Perform paired t-test for each pair to compute better.than
-#   forest.eval <- cbind(forest.eval, better.than=better.than(forest.eval.auc.total))  
-
 #   # Save parameter tuning data to .csv files
 #   if (params.fileOutput) {
 #     write.csv(forest.eval, file=paste(params.outDir, "random-forest/random-forest-eval.csv", sep=""))
@@ -830,31 +782,11 @@ data.cv <- cv.split.safe(data.train, prop="Purchase", value="Yes", folds=params.
 #   dev.off()
 # }
 
-# # Plot the results of t-tests
-# if (params.fileOutput) {
-#   pdf(paste(params.outDir, "random-forest/random-forest-comparison.pdf", sep=""), width=10, height=10)
-# }
-
-# par(cex=1.3, mar=c(5, 5, 5, 5))
-
-# plot(
-#   x=forest.eval$ntree,
-#   y=forest.eval$better.than,
-#   type="o",
-#   main="Performance of random forest model for different values of ntree\nround(seq(1, 30) ** 1.25)",
-#   xlab="ntree",
-#   ylab="Better than n values",
-# )
-
-# if (params.fileOutput) {
-#   dev.off()
-# }
-
 #
 # 6.3 Regularized Logistic Regression | ANCHOR
 #
 
-if (FALSE) {
+if (params.readDataFromFiles) {
 
   glmnet.eval <- as.data.frame(read.table(paste(params.outDir, "glmnet/glmnet-eval.csv", sep=""), header=TRUE, sep=",")[, -1])
 
@@ -914,7 +846,34 @@ if (FALSE) {
 
     write.csv(glmnet.eval.auc.total, file=paste(params.outDir, "glmnet/glmnet-eval-auc.csv", sep=""))
   }
+}
 
+# Plot AUC_0.2 mean and confidence intervals
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "glmnet/glmnet-eval.pdf", sep=""), width=10, height=10)
+}
+
+par(cex=1.3, mar=c(5, 5, 5, 5))
+
+plot(
+  x=glmnet.eval$ntree,
+  y=glmnet.eval$AUC.mean,
+  ylim=c(0, 0.1),
+  type="o",
+  main="Performance of Regularized Logistic Regression model for\ndifferent values of ntree\nx = round(seq(1, 30) ** 1.25)",
+  xlab="ntree",
+  ylab="Mean AUC_0.2",
+)
+
+error.bars(
+  x=glmnet.eval$ntree,
+  y0=glmnet.eval$AUC.CI.low,
+  y1=glmnet.eval$AUC.CI.high,
+  step=0.5
+)
+
+if (params.fileOutput) {
+  dev.off()
 }
 
 #

@@ -854,50 +854,50 @@ data.cv <- cv.split.safe(data.train, prop="Purchase", value="Yes", folds=params.
 # 6.3 Regularized Logistic Regression | ANCHOR
 #
 
-if (FALSE) {
+# if (params.readDataFromFiles) {
 
-  glmnet.eval <- as.data.frame(read.table(paste(params.outDir, "glmnet/glmnet-eval.csv", sep=""), header=TRUE, sep=",")[, -1])
+  # glmnet.eval <- as.data.frame(read.table(paste(params.outDir, "glmnet/glmnet-eval.csv", sep=""), header=TRUE, sep=",")[, -1])
 
   glmnet.eval.auc.total <- as.data.frame(read.table(paste(params.outDir, "glmnet/glmnet-eval-auc.csv", sep=""), header=TRUE, sep=",")[, -1])
   
-} else {
+# } else {
 
   # Setup eval data frame
   glmnet.eval <- data.frame(
-    alpha=seq(9, 14) * (1 / 14),
+    alpha=seq(0, 14) * (1 / 14),
     AUC.mean=NaN,
     AUC.std=NaN,
     AUC.CI.low=NaN,
     AUC.CI.high=NaN
   )
 
-  glmnet.eval.auc.total <- c()
+  # glmnet.eval.auc.total <- c()
 
   for (i in 1:nrow(glmnet.eval)) {
     alpha <- glmnet.eval[i, "alpha"]
 
-    glmnet.eval.auc <- c()
+    glmnet.eval.auc <- as.numeric(glmnet.eval.auc.total[i, 1:10])
 
-    for (k in 1:params.folds) {
-      # Take train and test data for this iteration of CV
-      data.cv.train <- data.train[-data.cv[[k]], ]
-      data.cv.test <- data.train[data.cv[[k]], ]
+    # for (k in 1:params.folds) {
+    #   # Take train and test data for this iteration of CV
+    #   data.cv.train <- data.train[-data.cv[[k]], ]
+    #   data.cv.test <- data.train[data.cv[[k]], ]
 
-      x <- model.matrix(Purchase~., data.cv.train)[,-1]
-      y <- ifelse(data.cv.train$Purchase == "Yes", 1, 0)
+    #   x <- model.matrix(Purchase~., data.cv.train)[,-1]
+    #   y <- ifelse(data.cv.train$Purchase == "Yes", 1, 0)
 
-      x.test <- model.matrix(Purchase ~., data.cv.test)[,-1]
+    #   x.test <- model.matrix(Purchase ~., data.cv.test)[,-1]
 
-      # Fit a regularized logistic regression
-      model <- cv.glmnet(x, y, alpha=alpha, family="binomial")
+    #   # Fit a regularized logistic regression
+    #   model <- cv.glmnet(x, y, alpha=alpha, family="binomial")
 
-      # Compute AUC
-      glmnet.auc <- auc.quick(data.cv.test$Purchase, predict(model, newx = x.test, s="lambda.min", type="response"))
+    #   # Compute AUC
+    #   glmnet.auc <- auc.quick(data.cv.test$Purchase, predict(model, newx = x.test, s="lambda.min", type="response"))
 
-      # Save performance measurements
-      glmnet.eval.auc <- c(glmnet.eval.auc, glmnet.auc)
-      glmnet.eval.auc.total <- c(glmnet.eval.auc.total, glmnet.auc)
-    }
+    #   # Save performance measurements
+    #   glmnet.eval.auc <- c(glmnet.eval.auc, glmnet.auc)
+    #   glmnet.eval.auc.total <- c(glmnet.eval.auc.total, glmnet.auc)
+    # }
 
     message(paste("alpha value set to", alpha))
     print(glmnet.eval.auc)
@@ -912,10 +912,10 @@ if (FALSE) {
   if (params.fileOutput) {
     write.csv(glmnet.eval, file=paste(params.outDir, "glmnet/glmnet-eval.csv", sep=""))
 
-    write.csv(glmnet.eval.auc.total, file=paste(params.outDir, "glmnet/glmnet-eval-auc.csv", sep=""))
+    # write.csv(glmnet.eval.auc.total, file=paste(params.outDir, "glmnet/glmnet-eval-auc.csv", sep=""))
   }
 
-}
+# }
 
 #
 # 6.4 Models Testing and Comparison
