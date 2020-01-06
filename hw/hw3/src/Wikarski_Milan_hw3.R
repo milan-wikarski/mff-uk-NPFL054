@@ -15,13 +15,15 @@
 # │  └─ 5.4: MOSTYPE, MOSHOOFD relationship (1b)
 # │
 # ├─ 6: Model fitting, optimization and selection (Task 2)
-# │  ├─ 6.1: Decision Tree
-# │  ├─ 6.2: Random Forest
-# │  ├─ 6.3: Regularized Logistic Regression
-# │  ├─ 6.4: Models Testing and Comparison
-# │  └─ 6.5: Best Model
+# │  ├─ 6.1: Decision Tree (2a)
+# │  ├─ 6.2: Random Forest (2b)
+# │  ├─ 6.3: Regularized Logistic Regression (2c)
+# │  ├─ 6.4: Models Testing and Comparison (2d)
+# │  └─ 6.5: Best Model (2e)
 # │
 # ├─ 7: Model interpretation and feature selection (Task 3)
+# │  ├─ 7.1: Tree vs Forest
+# │  ├─ 7.2: Lasso
 #
 #
 # used: │, ├, ─, └
@@ -599,10 +601,9 @@ for (i in 1:length(table(MOSHOOFD))) {
 data.cv <- cv.split.safe(data.train, prop="Purchase", value="Yes", folds=params.folds)
 
 #
-# 6.1: Decision Tree
+# 6.1: Decision Tree | ANCHOR
 #
 
-# SECTION Decision Tree
 if (params.readDataFromFiles) {
 
   tree.eval <- as.data.frame(read.table(paste(params.outDir, "decision-tree/decision-tree-eval.csv", sep=""), header=TRUE, sep=",")[, -1])
@@ -718,17 +719,15 @@ plot(
 if (params.fileOutput) {
   dev.off()
 }
-# !SECTION
 
 #
-# 6.2 Random Forest
+# 6.2 Random Forest | ANCHOR
 #
 
 # This block of code is used to tune multiple parameters using different ranges of values. The code has to be changed manually before tuning each parameter give a particular value range.
 
 # Parameter tuning takes a long time. Comment the whole section out to skip parameter tuning. Best parameters are declared explicitly in the 6.4 section. Please check the report for their explanation
 
-# SECTION Random Forest
 # if (params.readDataFromFiles) {
 
 #   forest.eval <- as.data.frame(read.table(paste(params.outDir, "random-forest/random-forest-eval.csv", sep=""), header=TRUE, sep=",")[, -1])
@@ -844,10 +843,8 @@ if (params.fileOutput) {
 #   dev.off()
 # }
 
-# !SECTION 
-
 #
-# 6.3 Regularized Logistic Regression
+# 6.3 Regularized Logistic Regression | ANCHOR
 #
 
 # alpha <- 0.5
@@ -862,8 +859,10 @@ if (params.fileOutput) {
 
 # probs <- predict(lasso, newx=x.test)
 
+#  
+
 #
-# 6.4 Models Testing and Comparison
+# 6.4 Models Testing and Comparison | ANCHOR
 #
 
 # #
@@ -957,10 +956,6 @@ if (params.fileOutput) {
 #   dev.off()
 # }
 
-# # Feature importance
-# forest.importance <- data.frame(feature=rownames(forest$importance), importance=forest$importance)
-# forest.importance <- forest.importance[rev(order(forest.importance[, 2])), ]
-
 # message("Random Forest")
 # print(forest.eval)
 # print(forest.roc$auc)
@@ -976,3 +971,178 @@ if (params.fileOutput) {
 ##    7: MODEL INTERPRETATION AND FEATURE SELECTION   ##
 ########################################################
 
+#
+# 7.1 Tree vs Forest | ANCHOR
+#
+
+# Calculate forest importance
+forest.importance <- data.frame(prop=rownames(forest$importance), importance=as.vector(forest$importance))
+forest.importance <- forest.importance[rev(order(forest.importance[, 2])), ]
+
+# Calculate tree importance
+tree.importance <- data.frame(prop=rownames(data.frame(tree$variable.importance)), importance=as.vector(tree$variable.importance))
+tree.importance <- tree.importance[rev(order(tree.importance[, 2])), ]
+
+# Plot 15 most important feature
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "features/15-most-important-features.pdf", sep=""), width=20, height=10)
+}
+
+par(mfrow=c(1, 2), cex=1.8, mar=c(8, 4, 4, 4), oma=c(0, 2, 5, 2))
+
+barplot(
+  forest.importance[1:15, 2],
+  names=forest.importance[1:15, 1],
+  las=2,
+  main="Random Forest model",
+  ylab="Importance"
+)
+
+barplot(
+  tree.importance[1:15, 2],
+  names=tree.importance[1:15, 1],
+  las=2,
+  main="Decision Tree model",
+  ylab="Importance"
+)
+
+mtext("15 Most important features", side=1, line=-25, cex=2.8, outer=TRUE, font=2)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+
+# Plot the importance of all feature
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "features/all-features.pdf", sep=""), width=20, height=10)
+}
+
+par(mfrow=c(1, 2), cex=1.8, mar=c(4, 4, 4, 4), oma=c(0, 2, 5, 2))
+
+plot(
+  rev(sort(forest$importance)),
+  type="o",
+  ylab="Importance",
+  main=paste("Random Forest model\nm = ", nrow(forest.importance), sep="")
+)
+
+plot(
+  rev(sort(tree$variable.importance)),
+  type="o",
+  ylab="Importance",
+  main=paste("Decision Tree model\nm = ", nrow(tree.importance), sep="")
+)
+
+mtext("Feature importance", side=1, line=-25, cex=2.8, outer=TRUE, font=2)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+# Plot the importance of all features standardized
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "features/all-features-standardized.pdf", sep=""), width=20, height=10)
+}
+
+par(mfrow=c(1, 2), cex=1.8, mar=c(4, 4, 4, 4), oma=c(0, 2, 5, 2))
+
+plot(
+  rev(sort(scale(forest$importance))),
+  type="o",
+  ylab="Importance",
+  main=paste("Random Forest model\nm = ", nrow(forest.importance), sep="")
+)
+
+plot(
+  rev(sort(scale(tree$variable.importance))),
+  type="o",
+  ylab="Importance",
+  main=paste("Decision Tree model\nm = ", nrow(tree.importance), sep="")
+)
+
+mtext("Standardized feature importance", side=1, line=-25, cex=2.8, outer=TRUE, font=2)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+# Explore the most important variables
+forest.importance.1 <- forest.importance[(which(scale(forest.importance[, 2]) > 1)), ]
+
+tree.importance.1 <- tree.importance[(which(scale(tree.importance[, 2]) > 1)), ]
+
+paste(forest.importance.1[, 1], collapse=", ")
+paste(tree.importance.1[, 1], collapse=", ")
+
+paste(intersect(tree.importance.1[, 1], forest.importance.1[, 1]), collapse=", ")
+# 
+
+#
+# 7.2 Lasso | ANCHOR 
+#
+
+# Lasso feature selection
+add.names <- function(fit) {
+  L <- length(fit$lambda)
+  x <- log(fit$lambda[L])
+  y <- fit$beta[, L]
+  labs <- names(y)
+  text(x, y, labels = labs, pos = 4, offset = 0.7)
+}
+
+count.features <- function(col) {
+  return (length(which(col != 0)))
+}
+
+x <- model.matrix(Purchase ~ ., data=data)
+y <- data.matrix(data$Purchase)
+
+grid <- 10^seq(-0.5, -5.5, length = 100)
+
+fit.lasso <- glmnet(x, y,
+	alpha = 1,
+	family = "binomial",
+	lambda = grid)
+
+# Analyze the number of features
+fit.lasso.features <- data.frame(lambda=seq(1,100), features=apply(fit.lasso$beta, 2, count.features))
+
+
+# Plot coefficients
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "features/lasso-coefficients.pdf", sep=""), width=20, height=10)
+}
+
+par(cex=1.8, mar=c(5, 5, 5, 5))
+
+plot(
+  fit.lasso,
+  xvar = "lambda",
+  main="Coefficients in Lasso model"
+)
+
+if (params.fileOutput) {
+  dev.off()
+}
+
+
+# Plot the number of features
+if (params.fileOutput) {
+  pdf(paste(params.outDir, "features/lasso-features.pdf", sep=""), width=10, height=10)
+}
+
+par(cex=1.8, mar=c(4, 4, 4, 4))
+
+plot(
+  x=log(grid[fit.lasso.features$lambda]),
+  y=fit.lasso.features$features,
+  type="o",
+  xlab="Log Lambda",
+  ylab="Number of non-zero features",
+  main="Feature count in lasso model"
+)
+
+if (params.fileOutput) {
+  dev.off()
+}
