@@ -864,7 +864,7 @@ if (FALSE) {
 
   # Setup eval data frame
   glmnet.eval <- data.frame(
-    alpha=seq(0, 14) * (1 / 14),
+    alpha=rev(seq(0, 14) * (1 / 14)),
     AUC.mean=NaN,
     AUC.std=NaN,
     AUC.CI.low=NaN,
